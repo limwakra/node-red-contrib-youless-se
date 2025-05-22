@@ -1,0 +1,33 @@
+{
+  "name": "node-red-contrib-youless-se",
+  "version": "2.0.0",
+  "description": "Node-RED node for YouLess energy metering devices",
+  "author": "limwakra",
+  "license": "MIT",
+  "keywords": [
+    "node-red",
+    "youless",
+    "energy",
+    "meter",
+    "electricity",
+    "gas",
+    "water",
+    "monitoring",
+    "smart meter"
+  ],
+  "node-red": {
+    "nodes": {
+      "youless": "youless.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/node-red-contrib-youless-se"
+  },
+  "dependencies": {
+    "axios": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
