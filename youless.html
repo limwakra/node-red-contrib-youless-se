@@ -1,0 +1,115 @@
+<script type="text/javascript">
+    RED.nodes.registerType('youless', {
+        category: 'energy',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value: ""},
+            host: {value: "", required: true},
+            interval: {value: 10, required: true, validate: RED.validators.number()},
+            model: {value: "LS110"},
+            password: {value: ""},
+            startAutomatically: {value: true}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "youless.png",
+        label: function() {
+            return this.name || "YouLess";
+        },
+        paletteLabel: "YouLess",
+        oneditprepare: function() {
+            var node = this;
+            $.getJSON('youless/models', function(data) {
+                var selectField = $('#node-input-model');
+                selectField.empty();
+                
+                data.forEach(function(model) {
+                    selectField.append($("<option></option>")
+                        .val(model.value)
+                        .text(model.label));
+                });
+                
+                selectField.val(node.model || 'LS110');
+            });
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="youless">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-host"><i class="fa fa-globe"></i> Host</label>
+        <input type="text" id="node-input-host" placeholder="IP or hostname">
+    </div>
+    <div class="form-row">
+        <label for="node-input-interval"><i class="fa fa-clock-o"></i> Interval (s)</label>
+        <input type="number" id="node-input-interval" min="1" step="1" placeholder="Seconds">
+    </div>
+    <div class="form-row">
+        <label for="node-input-model"><i class="fa fa-cog"></i> Model</label>
+        <select id="node-input-model" style="width: 70%;">
+            <!-- Populated by the oneditprepare function -->
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-password"><i class="fa fa-lock"></i> Password</label>
+        <input type="password" id="node-input-password" placeholder="Optional">
+    </div>
+    <div class="form-row">
+        <label for="node-input-startAutomatically"><i class="fa fa-play"></i> Auto-start</label>
+        <input type="checkbox" id="node-input-startAutomatically" style="width: auto; margin-top: 0;">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="youless">
+    <p>Node to connect to a YouLess energy meter.</p>
+    
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload
+            <span class="property-type">string</span>
+        </dt>
+        <dd>
+            <ul>
+                <li><code>start</code> - Start polling</li>
+                <li><code>stop</code> - Stop polling</li>
+                <li><code>restart</code> - Restart polling</li>
+                <li>Any other value - Trigger a single poll</li>
+            </ul>
+        </dd>
+    </dl>
+
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>payload
+            <span class="property-type">object</span>
+        </dt>
+        <dd>
+            <p>The data received from the YouLess meter containing:</p>
+            <ul>
+                <li><code>power</code> - Current power consumption in Watts</li>
+                <li><code>counter</code> - Total energy meter value in kWh</li>
+                <li><code>counterToday</code> - Today's energy consumption in kWh</li>
+                <li><code>timestamp</code> - ISO timestamp when data was received</li>
+                <li><code>s0</code> - Additional S0 meter data (LS120+ models only)</li>
+                <li><code>gas</code> - Gas meter data (LS130+ models only)</li>
+                <li><code>water</code> - Water meter data (LS140 model only)</li>
+            </ul>
+        </dd>
+    </dl>
+
+    <h3>Details</h3>
+    <p>This node connects to a YouLess energy meter to retrieve consumption data.</p>
+    <p>The polling interval determines how frequently data will be fetched from the meter.</p>
+    <p>Different YouLess models provide different data:</p>
+    <ul>
+        <li>LS110: Basic electricity data only</li>
+        <li>LS120: Adds S0 pulse counter support</li>
+        <li>LS130: Adds gas meter support</li>
+        <li>LS140: Adds water meter support</li>
+    </ul>
+    <p>The output message format will vary depending on the model selected.</p>
+</script>
