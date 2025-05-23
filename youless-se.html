@@ -1,24 +1,27 @@
 <script type="text/javascript">
     RED.nodes.registerType('youless-se', {
         category: 'energy',
-        color: '#a6bbcf',
+        color: '#95c86b',
         defaults: {
             name: {value: ""},
             host: {value: "", required: true},
             interval: {value: 10, required: true, validate: RED.validators.number()},
             model: {value: "LS110"},
             password: {value: ""},
-            startAutomatically: {value: true}
+            startAutomatically: {value: true},
+            showNegativeCurrent: {value: false}
         },
         inputs: 1,
         outputs: 1,
-        icon: "youless-se.png",
+        icon: "youless-se.svg",
         label: function() {
             return this.name || "YouLess SE";
         },
         paletteLabel: "YouLess SE",
         oneditprepare: function() {
             var node = this;
+            
+            // Setup model dropdown
             $.getJSON('youless-se/models', function(data) {
                 var selectField = $('#node-input-model');
                 selectField.empty();
@@ -30,6 +33,53 @@
                 });
                 
                 selectField.val(node.model || 'LS110');
+            });
+            
+            // Setup auto-discover button functionality
+            $("#node-input-discover").click(function() {
+                $("#node-input-discover").attr("disabled", true);
+                $("#discover-status").html('<i class="fa fa-spinner fa-spin"></i> Scanning network for YouLess devices...');
+                
+                $.getJSON('youless-se/discover', function(data) {
+                    $("#node-input-discover").attr("disabled", false);
+                    
+                    if (data && data.devices && data.devices.length > 0) {
+                        var deviceList = $("<select></select>").attr("id", "discovered-devices")
+                            .css("width", "70%")
+                            .change(function() {
+                                var selectedIndex = $(this).prop('selectedIndex');
+                                if (selectedIndex > 0) { // Skip the first "Select a device" option
+                                    var selectedDevice = data.devices[selectedIndex - 1];
+                                    $("#node-input-host").val(selectedDevice.ip);
+                                    
+                                    // Also set the model if available
+                                    if (selectedDevice.model && (selectedDevice.model === "LS110" || selectedDevice.model === "LS120")) {
+                                        $("#node-input-model").val(selectedDevice.model);
+                                    }
+                                }
+                            });
+                        
+                        deviceList.append($("<option></option>").text("Select a device...").val(""));
+                        
+                        data.devices.forEach(function(device) {
+                            var label = device.ip;
+                            if (device.model && device.model !== "Unknown") {
+                                label += " (Model: " + device.model + ")";
+                            } else if (device.name) {
+                                label += " (" + device.name + ")";
+                            }
+                            deviceList.append($("<option></option>").text(label).val(device.ip));
+                        });
+                        
+                        $("#discover-status").html("Found " + data.devices.length + " device(s):");
+                        $("#discover-status").append(deviceList);
+                    } else {
+                        $("#discover-status").html("No YouLess devices found on the network. Make sure they are connected and try again.");
+                    }
+                }).fail(function(jqXHR, textStatus, errorThrown) {
+                    $("#node-input-discover").attr("disabled", false);
+                    $("#discover-status").html("Error during discovery: " + errorThrown);
+                });
             });
         }
     });
@@ -43,6 +93,13 @@
     <div class="form-row">
         <label for="node-input-host"><i class="fa fa-globe"></i> Host</label>
         <input type="text" id="node-input-host" placeholder="IP or hostname">
+        <button type="button" id="node-input-discover" class="red-ui-button" style="margin-left: 10px;">
+            <i class="fa fa-search"></i> Discover
+        </button>
+    </div>
+    <div class="form-row">
+        <label>&nbsp;</label>
+        <span id="discover-status"></span>
     </div>
     <div class="form-row">
         <label for="node-input-interval"><i class="fa fa-clock-o"></i> Interval (s)</label>
@@ -62,54 +119,60 @@
         <label for="node-input-startAutomatically"><i class="fa fa-play"></i> Auto-start</label>
         <input type="checkbox" id="node-input-startAutomatically" style="width: auto; margin-top: 0;">
     </div>
+    <div class="form-row">
+        <label for="node-input-showNegativeCurrent"><i class="fa fa-exchange"></i> Show negative current</label>
+        <input type="checkbox" id="node-input-showNegativeCurrent" style="width: auto; margin-top: 0;">
+        <div style="max-width: 480px; margin-top: 5px; margin-left: 105px; color: #999;">
+            When enabled, current values will be shown as negative when power is negative (during generation).
+        </div>
+    </div>
 </script>
 
 <script type="text/html" data-help-name="youless-se">
-    <p>Node to connect to a YouLess energy meter (Special Edition).</p>
+    <p>A node to retrieve energy usage data from YouLess energy meters.</p>
     
     <h3>Inputs</h3>
     <dl class="message-properties">
-        <dt>payload
-            <span class="property-type">string</span>
-        </dt>
+        <dt>payload <span class="property-type">string</span></dt>
         <dd>
             <ul>
-                <li><code>start</code> - Start polling</li>
-                <li><code>stop</code> - Stop polling</li>
+                <li><code>start</code> - Start polling for data</li>
+                <li><code>stop</code> - Stop polling for data</li>
                 <li><code>restart</code> - Restart polling</li>
-                <li>Any other value - Trigger a single poll</li>
+                <li>Any other value - Trigger a single data fetch</li>
             </ul>
         </dd>
     </dl>
-
+    
     <h3>Outputs</h3>
     <dl class="message-properties">
-        <dt>payload
-            <span class="property-type">object</span>
-        </dt>
+        <dt>payload <span class="property-type">object</span></dt>
         <dd>
-            <p>The data received from the YouLess meter containing:</p>
+            Energy data from the YouLess meter:
             <ul>
-                <li><code>power</code> - Current power consumption in Watts</li>
-                <li><code>counter</code> - Total energy meter value in kWh</li>
-                <li><code>counterToday</code> - Today's energy consumption in kWh</li>
-                <li><code>timestamp</code> - ISO timestamp when data was received</li>
-                <li><code>s0</code> - Additional S0 meter data (LS120+ models only)</li>
-                <li><code>gas</code> - Gas meter data (LS130+ models only)</li>
-                <li><code>water</code> - Water meter data (LS140 model only)</li>
+                <li><code>timestamp</code> - ISO date/time when the data was fetched</li>
+                <li><code>power</code> - Current power usage in Watts (may be negative if generating)</li>
+                <li><code>powerAbsolute</code> - Absolute power value in Watts</li>
+                <li><code>isGenerating</code> - True when generating electricity</li>
+                <li><code>net</code> - Net meter reading in kWh</li>
+                <li><code>delivered</code> - Energy delivered from grid (consumption)</li>
+                <li><code>returned</code> - Energy returned to grid (generation)</li>
+                <li><code>phases</code> - Phase-specific data (voltage, current, power)</li>
+                <li><code>s0</code> - S0 pulse counter data (LS120 only)</li>
             </ul>
         </dd>
     </dl>
-
+    
     <h3>Details</h3>
-    <p>This node connects to a YouLess energy meter to retrieve consumption data.</p>
-    <p>The polling interval determines how frequently data will be fetched from the meter.</p>
-    <p>Different YouLess models provide different data:</p>
+    <p>This node retrieves energy usage data from YouLess energy meters by accessing the meter's API.</p>
+    
+    <h3>Configuration</h3>
     <ul>
-        <li>LS110: Basic electricity data only</li>
-        <li>LS120: Adds S0 pulse counter support</li>
-        <li>LS130: Adds gas meter support</li>
-        <li>LS140: Adds water meter support</li>
+        <li><strong>Host</strong> - IP address or hostname of the YouLess meter</li>
+        <li><strong>Interval</strong> - How often to poll for data (in seconds)</li>
+        <li><strong>Model</strong> - The YouLess model you're using</li>
+        <li><strong>Password</strong> - Optional password if the meter is password-protected</li>
+        <li><strong>Auto-start</strong> - Start polling when Node-RED starts or the node is deployed</li>
+        <li><strong>Show negative current</strong> - Display current as negative when power is negative (during generation)</li>
     </ul>
-    <p>The output message format will vary depending on the model selected.</p>
 </script>
