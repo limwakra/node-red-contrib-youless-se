@@ -10,7 +10,8 @@
             password: {value: ""},
             startAutomatically: {value: true},
             showNegativeCurrent: {value: false},
-            customTopic: {value: ""}
+            customTopic: {value: ""},
+            decimalPlaces: {value: -1}
         },
         inputs: 1,
         outputs: 1,
@@ -140,6 +141,13 @@
         </div>
     </div>
     <div class="form-row">
+        <label for="node-input-decimalPlaces"><i class="fa fa-calculator"></i> Decimal places</label>
+        <input type="number" id="node-input-decimalPlaces" min="-1" max="10" step="1" style="width: 70px;">
+        <div style="max-width: 480px; margin-top: 5px; margin-left: 105px; color: #999;">
+            Maximum number of decimal places for numeric values. Set to -1 to use values as received from the device.
+        </div>
+    </div>
+    <div class="form-row">
         <label for="node-input-startAutomatically"><i class="fa fa-play"></i> Auto-start</label>
         <input type="checkbox" id="node-input-startAutomatically" style="width: auto; margin-top: 0;">
     </div>
@@ -201,6 +209,7 @@
         <li><strong>Model</strong> - The YouLess model you're using</li>
         <li><strong>Password</strong> - Optional password if the meter is password-protected</li>
         <li><strong>Custom topic</strong> - Optional custom message topic to differentiate between multiple YouLess devices</li>
+        <li><strong>Decimal places</strong> - Maximum number of decimal places for numeric values (-1 to use values as received)</li>
         <li><strong>Auto-start</strong> - Start polling when Node-RED starts or the node is deployed</li>
         <li><strong>Show negative current</strong> - Display current as negative when power is negative (during generation)</li>
     </ul>
