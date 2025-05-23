@@ -34,72 +34,113 @@ module.exports = function(RED) {
     // Function to ping a potential YouLess device
     async function pingYouLess(ip) {
         try {
-            // First check if it responds to the energy endpoint
-            const energyResponse = await axios.get(`http://${ip}/e?f=j`, {
-                timeout: 2000,
-                validateStatus: function (status) {
-                    return status < 500; // Accept all responses < 500 to capture 404 responses too
-                }
-            });
+            // First try to get the device model information from /d endpoint
+            // This works for both LS110 and LS120
+            let model = "Unknown";
+            let mac = "";
+            let isYouLess = false;
             
-            // Check if response looks like a YouLess
-            if (energyResponse.status === 200 && energyResponse.data) {
-                // Look for YouLess-specific data patterns
-                if (Array.isArray(energyResponse.data) && 
-                    energyResponse.data.length > 0 && 
-                    (energyResponse.data[0].pwr !== undefined || energyResponse.data[0].net !== undefined)) {
+            try {
+                const modelResponse = await axios.get(`http://${ip}/d`, {
+                    timeout: 2000,
+                    validateStatus: function (status) {
+                        return status < 500; // Accept all responses < 500
+                    }
+                });
+                
+                if (modelResponse.status === 200 && modelResponse.data) {
+                    // Parse JSON if it's a string
+                    let deviceInfo = modelResponse.data;
+                    if (typeof deviceInfo === 'string') {
+                        try {
+                            deviceInfo = JSON.parse(deviceInfo);
+                        } catch (e) {
+                            // If it fails to parse, just continue
+                        }
+                    }
                     
-                    // Now get the device model from the /d endpoint
-                    let model = "Unknown";
-                    let mac = "";
+                    // Extract model and MAC if available
+                    if (deviceInfo.model) {
+                        model = deviceInfo.model;
+                        isYouLess = true; // If we got a model, it's likely a YouLess device
+                    }
+                    if (deviceInfo.mac) {
+                        mac = deviceInfo.mac;
+                    }
+                }
+            } catch (modelError) {
+                // Couldn't get model info, continue with other checks
+            }
+            
+            // If we haven't confirmed it's a YouLess, try an endpoint check based on potential model
+            if (!isYouLess) {
+                try {
+                    // For LS110, check the /a?f=j endpoint
+                    const ls110Response = await axios.get(`http://${ip}/a?f=j`, {
+                        timeout: 2000,
+                        validateStatus: function (status) {
+                            return status < 500;
+                        }
+                    });
                     
+                    if (ls110Response.status === 200 && ls110Response.data) {
+                        // Check for LS110-specific data pattern
+                        const data = ls110Response.data;
+                        if (data.cnt !== undefined && data.pwr !== undefined) {
+                            isYouLess = true;
+                            model = "LS110"; // If /a?f=j works, it's likely an LS110
+                        }
+                    }
+                } catch (ls110Error) {
+                    // Not an LS110 or not responding to that endpoint
+                }
+                
+                // If still not confirmed, try LS120 endpoint
+                if (!isYouLess) {
                     try {
-                        const modelResponse = await axios.get(`http://${ip}/d`, {
-                            timeout: 2000
+                        const ls120Response = await axios.get(`http://${ip}/e?f=j`, {
+                            timeout: 2000,
+                            validateStatus: function (status) {
+                                return status < 500;
+                            }
                         });
                         
-                        if (modelResponse.status === 200 && modelResponse.data) {
-                            // Parse JSON if it's a string (sometimes the response might be a string)
-                            let deviceInfo = modelResponse.data;
-                            if (typeof deviceInfo === 'string') {
-                                try {
-                                    deviceInfo = JSON.parse(deviceInfo);
-                                } catch (e) {
-                                    // If it fails to parse, just continue
-                                }
-                            }
-                            
-                            // Extract model and MAC if available
-                            if (deviceInfo.model) {
-                                model = deviceInfo.model;
-                            }
-                            if (deviceInfo.mac) {
-                                mac = deviceInfo.mac;
+                        if (ls120Response.status === 200 && ls120Response.data) {
+                            // Check for LS120-specific data pattern
+                            if (Array.isArray(ls120Response.data) && 
+                                ls120Response.data.length > 0 && 
+                                (ls120Response.data[0].pwr !== undefined || ls120Response.data[0].net !== undefined)) {
+                                isYouLess = true;
+                                model = "LS120"; // If /e?f=j works, it's likely an LS120
                             }
                         }
-                    } catch (modelError) {
-                        // If model info fails, just continue with unknown model
+                    } catch (ls120Error) {
+                        // Not an LS120 or not responding to that endpoint
                     }
-                    
-                    let name = null;
-                    // Try to get hostname
-                    try {
-                        const hostnames = await reverse(ip);
-                        if (hostnames && hostnames.length > 0) {
-                            name = hostnames[0];
-                        }
-                    } catch (e) {
-                        // Ignore reverse lookup errors
-                    }
-                    
-                    return {
-                        ip: ip,
-                        name: name,
-                        model: model,
-                        mac: mac
-                    };
                 }
             }
+            
+            // If we've confirmed it's a YouLess device, return the details
+            if (isYouLess) {
+                let name = null;
+                // Try to get hostname
+                try {
+                    const hostnames = await reverse(ip);
+                    if (hostnames && hostnames.length > 0) {
+                        name = hostnames[0];
+                    }
+                } catch (e) {
+                    // Ignore reverse lookup errors
+                }
+                
+                return {
+                    ip: ip,
+                    name: name,
+                    model: model,
+                    mac: mac
+                };
+            }
+            
             return null;
         } catch (error) {
             // Ignore errors, device is not a YouLess or not responsive
@@ -173,6 +214,15 @@ module.exports = function(RED) {
         return result;
     }
 
+    // Helper function to parse numeric string that might contain a comma instead of a period
+    function parseNumericString(str) {
+        if (typeof str !== 'string') return str;
+        // Replace comma with period and trim whitespace
+        const cleaned = str.trim().replace(',', '.');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? str : num;
+    }
+
     function YoulessNode(config) {
         RED.nodes.createNode(this, config);
         const node = this;
@@ -218,141 +268,233 @@ module.exports = function(RED) {
             return requestConfig;
         }
 
+        // Function to fetch data from LS110 model
+        async function fetchLS110Data() {
+            const baseUrl = `http://${node.host}`;
+            let meterData = {
+                timestamp: new Date().toISOString(),
+                model: "LS110"
+            };
+            
+            // Fetch main energy data from the LS110 JSON endpoint
+            const response = await axios.get(`${baseUrl}/a?f=j`, createRequestConfig());
+            
+            node.log(`Raw LS110 data: ${JSON.stringify(response.data)}`);
+            
+            // Process LS110 data
+            const data = response.data;
+            
+            // Extract electricity values
+            meterData.power = data.pwr;
+            meterData.isGenerating = data.pwr < 0;
+            meterData.powerAbsolute = Math.abs(data.pwr);
+            
+            // Counter value (parse string with potential comma)
+            meterData.counter = parseNumericString(data.cnt);
+            
+            // Signal level
+            if (data.lvl !== undefined) {
+                meterData.signalLevel = data.lvl;
+            }
+            
+            // Additional fields if they exist
+            if (data.dev) meterData.device = data.dev;
+            if (data.det) meterData.details = data.det;
+            if (data.con) meterData.connection = data.con;
+            if (data.sts) meterData.status = data.sts;
+            if (data.raw) meterData.rawValue = data.raw;
+            
+            return meterData;
+        }
+
+        // Function to fetch data from LS120 model
+        async function fetchLS120Data() {
+            const baseUrl = `http://${node.host}`;
+            let meterData = {
+                timestamp: new Date().toISOString(),
+                model: "LS120"
+            };
+            
+            // Fetch main energy data from the LS120 JSON endpoint
+            const energyResponse = await axios.get(`${baseUrl}/e?f=j`, createRequestConfig());
+            
+            node.log(`Raw LS120 energy data: ${JSON.stringify(energyResponse.data)}`);
+            
+            // Process LS120 energy data
+            if (energyResponse.data && Array.isArray(energyResponse.data) && energyResponse.data.length > 0) {
+                const data = energyResponse.data[0];
+                
+                // Extract main electricity values
+                meterData.power = data.pwr;
+                meterData.isGenerating = data.pwr < 0;
+                meterData.powerAbsolute = Math.abs(data.pwr);
+                
+                // Total meter values
+                meterData.net = data.net;  // Net meter reading (can be negative if generating more than consuming)
+                
+                // P1/P2 are delivery (consumption) meters, N1/N2 are return (generation) meters
+                meterData.delivered = {
+                    total: (data.p1 || 0) + (data.p2 || 0),
+                    tariff1: data.p1 || 0,
+                    tariff2: data.p2 || 0
+                };
+                
+                meterData.returned = {
+                    total: (data.n1 || 0) + (data.n2 || 0),
+                    tariff1: data.n1 || 0,
+                    tariff2: data.n2 || 0
+                };
+                
+                // S0 pulse counter
+                if (data.cs0 !== undefined) {
+                    meterData.s0 = {
+                        counter: data.cs0,
+                        power: data.ps0 || 0,
+                        timestamp: data.ts0 ? new Date(data.ts0 * 1000).toISOString() : null
+                    };
+                }
+                
+                // Gas meter
+                if (data.gas !== undefined) {
+                    meterData.gas = {
+                        counter: data.gas,
+                        timestamp: data.gts ? new Date(data.gts * 1000).toISOString() : null
+                    };
+                }
+                
+                // Water meter
+                if (data.wtr !== undefined) {
+                    meterData.water = {
+                        counter: data.wtr,
+                        timestamp: data.wts ? new Date(data.wts * 1000).toISOString() : null
+                    };
+                }
+                
+                // Try to get phase information
+                try {
+                    const phaseResponse = await axios.get(`${baseUrl}/f?f=j`, createRequestConfig());
+                    
+                    node.log(`Raw phase data: ${JSON.stringify(phaseResponse.data)}`);
+                    
+                    if (phaseResponse.data) {
+                        const phaseData = phaseResponse.data;
+                        
+                        // Calculate phase values, potentially making currents negative
+                        const processPhaseValue = (current, voltage, power) => {
+                            let processedCurrent = current || 0;
+                            // If showNegativeCurrent is enabled and power is negative, make current negative too
+                            if (node.showNegativeCurrent && power < 0 && processedCurrent > 0) {
+                                processedCurrent = -processedCurrent;
+                            }
+                            return {
+                                current: processedCurrent,
+                                voltage: voltage || 0,
+                                power: power || 0
+                            };
+                        };
+                        
+                        meterData.phases = {
+                            L1: processPhaseValue(phaseData.i1, phaseData.v1, phaseData.l1),
+                            L2: processPhaseValue(phaseData.i2, phaseData.v2, phaseData.l2),
+                            L3: processPhaseValue(phaseData.i3, phaseData.v3, phaseData.l3)
+                        };
+                        
+                        // Additional values
+                        if (phaseData.tr !== undefined) meterData.tariff = phaseData.tr;
+                        if (phaseData.pa !== undefined) meterData.activePower = phaseData.pa;
+                        if (phaseData.pp !== undefined) meterData.peakPower = phaseData.pp;
+                        if (phaseData.pts !== undefined) meterData.peakTimestamp = new Date(phaseData.pts * 1000).toISOString();
+                    }
+                } catch (phaseError) {
+                    node.warn(`Error getting phase data: ${phaseError.message}`);
+                }
+            }
+            
+            return meterData;
+        }
+
+        // Detect the actual model if not sure
+        async function detectModel() {
+            try {
+                // Try to get model information from /d endpoint
+                const modelResponse = await axios.get(`http://${node.host}/d`, createRequestConfig());
+                
+                if (modelResponse.data) {
+                    // Parse JSON if it's a string
+                    let deviceInfo = modelResponse.data;
+                    if (typeof deviceInfo === 'string') {
+                        try {
+                            deviceInfo = JSON.parse(deviceInfo);
+                        } catch (e) {
+                            // If it fails to parse, just use the configured model
+                            return node.model;
+                        }
+                    }
+                    
+                    // Return detected model if available
+                    if (deviceInfo.model) {
+                        return deviceInfo.model;
+                    }
+                }
+            } catch (error) {
+                // If we can't detect the model, fall back to the configured model
+                node.warn(`Couldn't detect model: ${error.message}, using configured model: ${node.model}`);
+            }
+            
+            return node.model;
+        }
+
         // Fetch data from YouLess meter
         async function fetchData() {
             try {
-                const baseUrl = `http://${node.host}`;
-                let meterData = {
-                    timestamp: new Date().toISOString()
-                };
+                // First detect or confirm the model
+                const detectedModel = await detectModel();
+                let meterData;
                 
-                // Fetch main energy data from the correct JSON endpoint
-                const energyResponse = await axios.get(`${baseUrl}/e?f=j`, createRequestConfig());
-                
-                node.log(`Raw energy data: ${JSON.stringify(energyResponse.data)}`);
-                
-                // Process main energy data
-                if (energyResponse.data && Array.isArray(energyResponse.data) && energyResponse.data.length > 0) {
-                    const data = energyResponse.data[0];
-                    
-                    // Extract main electricity values
-                    meterData.power = data.pwr;
-                    meterData.isGenerating = data.pwr < 0;
-                    meterData.powerAbsolute = Math.abs(data.pwr);
-                    
-                    // Total meter values
-                    meterData.net = data.net;  // Net meter reading (can be negative if generating more than consuming)
-                    
-                    // P1/P2 are delivery (consumption) meters, N1/N2 are return (generation) meters
-                    meterData.delivered = {
-                        total: (data.p1 || 0) + (data.p2 || 0),
-                        tariff1: data.p1 || 0,
-                        tariff2: data.p2 || 0
-                    };
-                    
-                    meterData.returned = {
-                        total: (data.n1 || 0) + (data.n2 || 0),
-                        tariff1: data.n1 || 0,
-                        tariff2: data.n2 || 0
-                    };
-                    
-                    // S0 pulse counter
-                    if (data.cs0 !== undefined) {
-                        meterData.s0 = {
-                            counter: data.cs0,
-                            power: data.ps0 || 0,
-                            timestamp: data.ts0 ? new Date(data.ts0 * 1000).toISOString() : null
-                        };
-                    }
-                    
-                    // Gas meter
-                    if (data.gas !== undefined) {
-                        meterData.gas = {
-                            counter: data.gas,
-                            timestamp: data.gts ? new Date(data.gts * 1000).toISOString() : null
-                        };
-                    }
-                    
-                    // Water meter
-                    if (data.wtr !== undefined) {
-                        meterData.water = {
-                            counter: data.wtr,
-                            timestamp: data.wts ? new Date(data.wts * 1000).toISOString() : null
-                        };
-                    }
-                    
-                    // Try to get phase information
-                    try {
-                        const phaseResponse = await axios.get(`${baseUrl}/f?f=j`, createRequestConfig());
-                        
-                        node.log(`Raw phase data: ${JSON.stringify(phaseResponse.data)}`);
-                        
-                        if (phaseResponse.data) {
-                            const phaseData = phaseResponse.data;
-                            
-                            // Calculate phase values, potentially making currents negative
-                            const processPhaseValue = (current, voltage, power) => {
-                                let processedCurrent = current || 0;
-                                // If showNegativeCurrent is enabled and power is negative, make current negative too
-                                if (node.showNegativeCurrent && power < 0 && processedCurrent > 0) {
-                                    processedCurrent = -processedCurrent;
-                                }
-                                return {
-                                    current: processedCurrent,
-                                    voltage: voltage || 0,
-                                    power: power || 0
-                                };
-                            };
-                            
-                            meterData.phases = {
-                                L1: processPhaseValue(phaseData.i1, phaseData.v1, phaseData.l1),
-                                L2: processPhaseValue(phaseData.i2, phaseData.v2, phaseData.l2),
-                                L3: processPhaseValue(phaseData.i3, phaseData.v3, phaseData.l3)
-                            };
-                            
-                            // Additional values
-                            if (phaseData.tr !== undefined) meterData.tariff = phaseData.tr;
-                            if (phaseData.pa !== undefined) meterData.activePower = phaseData.pa;
-                            if (phaseData.pp !== undefined) meterData.peakPower = phaseData.pp;
-                            if (phaseData.pts !== undefined) meterData.peakTimestamp = new Date(phaseData.pts * 1000).toISOString();
-                        }
-                    } catch (phaseError) {
-                        node.warn(`Error getting phase data: ${phaseError.message}`);
-                    }
-                    
-                    // Apply decimal places formatting if enabled
-                    if (node.decimalPlaces >= 0) {
-                        meterData = processObjectValues(meterData, node.decimalPlaces);
-                    }
-                    
-                    // Reset error count on success
-                    errorCount = 0;
-                    
-                    // Update node status
-                    const powerDisplay = meterData.isGenerating ? 
-                        `-${meterData.powerAbsolute}` : 
-                        `${meterData.powerAbsolute}`;
-                    
-                    node.status({
-                        fill: meterData.isGenerating ? "green" : "yellow",
-                        shape: "dot", 
-                        text: `${powerDisplay} W`
-                    });
-                    
-                    // Determine message topic
-                    let messageTopic = "youless";
-                    if (node.customTopic) {
-                        messageTopic = node.customTopic;
-                    }
-                    
-                    // Send message with the data
-                    node.send({
-                        topic: messageTopic,
-                        payload: meterData
-                    });
+                // Fetch data based on the detected model
+                if (detectedModel === "LS110") {
+                    meterData = await fetchLS110Data();
+                } else if (detectedModel === "LS120") {
+                    meterData = await fetchLS120Data();
                 } else {
-                    throw new Error("Invalid or empty data format received");
+                    // If we can't determine the model, try LS120 first, then fall back to LS110
+                    try {
+                        meterData = await fetchLS120Data();
+                    } catch (ls120Error) {
+                        meterData = await fetchLS110Data();
+                    }
                 }
+                
+                // Apply decimal places formatting if enabled
+                if (node.decimalPlaces >= 0) {
+                    meterData = processObjectValues(meterData, node.decimalPlaces);
+                }
+                
+                // Reset error count on success
+                errorCount = 0;
+                
+                // Update node status
+                const powerDisplay = meterData.isGenerating ? 
+                    `-${meterData.powerAbsolute}` : 
+                    `${meterData.powerAbsolute}`;
+                
+                node.status({
+                    fill: meterData.isGenerating ? "green" : "yellow",
+                    shape: "dot", 
+                    text: `${powerDisplay} W`
+                });
+                
+                // Determine message topic
+                let messageTopic = "youless";
+                if (node.customTopic) {
+                    messageTopic = node.customTopic;
+                }
+                
+                // Send message with the data
+                node.send({
+                    topic: messageTopic,
+                    payload: meterData
+                });
             } catch (error) {
                 errorCount++;
                 node.status({fill: "red", shape: "ring", text: `error (${errorCount}/${MAX_ERRORS})`});
