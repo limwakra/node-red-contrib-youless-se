@@ -9,11 +9,12 @@
             model: {value: "LS110"},
             password: {value: ""},
             startAutomatically: {value: true},
-            showNegativeCurrent: {value: false}
+            showNegativeCurrent: {value: false},
+            customTopic: {value: ""}
         },
         inputs: 1,
         outputs: 1,
-        icon: "youless-se.svg",
+        icon: "youless-se.png",
         label: function() {
             return this.name || "YouLess SE";
         },
@@ -55,6 +56,22 @@
                                     // Also set the model if available
                                     if (selectedDevice.model && (selectedDevice.model === "LS110" || selectedDevice.model === "LS120")) {
                                         $("#node-input-model").val(selectedDevice.model);
+                                    }
+                                    
+                                    // Suggest a custom topic based on the device model and IP
+                                    if (!$("#node-input-customTopic").val()) {
+                                        var suggestedTopic = "youless";
+                                        if (selectedDevice.model) {
+                                            suggestedTopic += "/" + selectedDevice.model.toLowerCase();
+                                        }
+                                        // Add last part of IP to make it unique
+                                        if (selectedDevice.ip) {
+                                            var ipParts = selectedDevice.ip.split('.');
+                                            if (ipParts.length === 4) {
+                                                suggestedTopic += "/" + ipParts[3];
+                                            }
+                                        }
+                                        $("#node-input-customTopic").val(suggestedTopic);
                                     }
                                 }
                             });
@@ -116,6 +133,13 @@
         <input type="password" id="node-input-password" placeholder="Optional">
     </div>
     <div class="form-row">
+        <label for="node-input-customTopic"><i class="fa fa-tasks"></i> Custom topic</label>
+        <input type="text" id="node-input-customTopic" placeholder="youless">
+        <div style="max-width: 480px; margin-top: 5px; margin-left: 105px; color: #999;">
+            Custom topic for messages. Default is "youless" if left empty. Useful to differentiate between multiple devices.
+        </div>
+    </div>
+    <div class="form-row">
         <label for="node-input-startAutomatically"><i class="fa fa-play"></i> Auto-start</label>
         <input type="checkbox" id="node-input-startAutomatically" style="width: auto; margin-top: 0;">
     </div>
@@ -146,6 +170,10 @@
     
     <h3>Outputs</h3>
     <dl class="message-properties">
+        <dt>topic <span class="property-type">string</span></dt>
+        <dd>
+            The message topic. By default "youless" or your custom topic if specified.
+        </dd>
         <dt>payload <span class="property-type">object</span></dt>
         <dd>
             Energy data from the YouLess meter:
@@ -172,6 +200,7 @@
         <li><strong>Interval</strong> - How often to poll for data (in seconds)</li>
         <li><strong>Model</strong> - The YouLess model you're using</li>
         <li><strong>Password</strong> - Optional password if the meter is password-protected</li>
+        <li><strong>Custom topic</strong> - Optional custom message topic to differentiate between multiple YouLess devices</li>
         <li><strong>Auto-start</strong> - Start polling when Node-RED starts or the node is deployed</li>
         <li><strong>Show negative current</strong> - Display current as negative when power is negative (during generation)</li>
     </ul>
