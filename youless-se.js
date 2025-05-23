@@ -133,6 +133,46 @@ module.exports = function(RED) {
         return devices;
     }
 
+    // Helper function to round numbers to specified decimal places
+    function roundToDecimalPlaces(value, decimalPlaces) {
+        if (decimalPlaces < 0 || !Number.isFinite(value) || isNaN(value)) {
+            return value; // Return unchanged if invalid
+        }
+        
+        const factor = Math.pow(10, decimalPlaces);
+        return Math.round(value * factor) / factor;
+    }
+
+    // Helper function to process objects recursively and round all number values
+    function processObjectValues(obj, decimalPlaces) {
+        if (obj === null || typeof obj !== 'object') {
+            return obj;
+        }
+        
+        // For arrays, process each item
+        if (Array.isArray(obj)) {
+            return obj.map(item => processObjectValues(item, decimalPlaces));
+        }
+        
+        // For objects, process each property
+        const result = {};
+        for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                const value = obj[key];
+                
+                if (typeof value === 'number') {
+                    result[key] = roundToDecimalPlaces(value, decimalPlaces);
+                } else if (typeof value === 'object' && value !== null) {
+                    result[key] = processObjectValues(value, decimalPlaces);
+                } else {
+                    result[key] = value;
+                }
+            }
+        }
+        
+        return result;
+    }
+
     function YoulessNode(config) {
         RED.nodes.createNode(this, config);
         const node = this;
@@ -146,6 +186,12 @@ module.exports = function(RED) {
         this.startAutomatically = config.startAutomatically !== false; // Ensure proper boolean conversion
         this.showNegativeCurrent = config.showNegativeCurrent || false;
         this.customTopic = config.customTopic || "";
+        this.decimalPlaces = parseInt(config.decimalPlaces);
+        
+        // Validate decimal places
+        if (isNaN(this.decimalPlaces) || this.decimalPlaces < 0) {
+            this.decimalPlaces = -1; // Disabled (don't round)
+        }
         
         // Status management
         let intervalId = null;
@@ -272,6 +318,11 @@ module.exports = function(RED) {
                         }
                     } catch (phaseError) {
                         node.warn(`Error getting phase data: ${phaseError.message}`);
+                    }
+                    
+                    // Apply decimal places formatting if enabled
+                    if (node.decimalPlaces >= 0) {
+                        meterData = processObjectValues(meterData, node.decimalPlaces);
                     }
                     
                     // Reset error count on success
