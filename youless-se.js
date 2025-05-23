@@ -145,6 +145,7 @@ module.exports = function(RED) {
         this.password = config.password || "";
         this.startAutomatically = config.startAutomatically !== false; // Ensure proper boolean conversion
         this.showNegativeCurrent = config.showNegativeCurrent || false;
+        this.customTopic = config.customTopic || "";
         
         // Status management
         let intervalId = null;
@@ -287,9 +288,15 @@ module.exports = function(RED) {
                         text: `${powerDisplay} W`
                     });
                     
+                    // Determine message topic
+                    let messageTopic = "youless";
+                    if (node.customTopic) {
+                        messageTopic = node.customTopic;
+                    }
+                    
                     // Send message with the data
                     node.send({
-                        topic: "youless",
+                        topic: messageTopic,
                         payload: meterData
                     });
                 } else {
