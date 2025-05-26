@@ -6,7 +6,7 @@
     "nodes": [
       {
         "id": "youless-1",
-        "type": "youless",
+        "type": "youless-se",
         "z": "basic-youless-flow",
         "name": "My YouLess Meter",
         "ip": "192.168.1.100",
@@ -74,7 +74,7 @@
     "nodes": [
       {
         "id": "youless-2",
-        "type": "youless",
+        "type": "youless-se",
         "z": "dashboard-youless-flow",
         "name": "Energy Meter",
         "ip": "192.168.1.100",
@@ -177,7 +177,7 @@
     "nodes": [
       {
         "id": "youless-3",
-        "type": "youless",
+        "type": "youless-se",
         "z": "home-assistant-flow",
         "name": "YouLess HA",
         "ip": "192.168.1.100",
