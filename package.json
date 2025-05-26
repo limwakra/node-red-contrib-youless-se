@@ -1,6 +1,6 @@
-  {
+{
   "name": "node-red-contrib-youless-se",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Node-RED node for YouLess energy meters with support for various models (LS110, LS120)",
   "main": "youless-se.js",
   "scripts": {
@@ -9,7 +9,7 @@
   "node-red": {
     "version": ">=2.0.0",
     "nodes": {
-      "youless": "youless-se.js"
+      "youless-se": "youless-se.js"
     }
   },
   "keywords": [
@@ -22,7 +22,7 @@
     "energy monitoring"
   ],
   "author": {
-    "name": "iCrOn",
+    "name": "limwakra",
     "email": "icron@geensen.nl"
   },
   "license": "MIT",
@@ -35,8 +35,11 @@
   },
   "homepage": "https://github.com/limwakra/node-red-contrib-youless-se#readme",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=14.0.0",
     "node-red": ">=2.0.0"
   },
-  "dependencies": {}
+  "files": [
+    "youless-se.js",
+    "youless-se.html"
+  ]
 }
