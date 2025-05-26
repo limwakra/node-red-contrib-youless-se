@@ -4,9 +4,9 @@
         color: '#95c86b',
         defaults: {
             name: {value: ""},
-            host: {value: "", required: true},
+            host: {value: "", required: true, validate: function(v) { return v && v.trim() !== ""; }},
             interval: {value: 10, required: true, validate: RED.validators.number()},
-            model: {value: "LS110"},
+            model: {value: "LS110", required: true},
             password: {value: ""},
             startAutomatically: {value: true},
             showNegativeCurrent: {value: false},
@@ -15,7 +15,7 @@
         },
         inputs: 1,
         outputs: 1,
-        icon: "youless.svg",
+        icon: "youless.svg",  // Make sure this matches your SVG filename exactly
         label: function() {
             return this.name || "YouLess SE";
         },
@@ -99,6 +99,25 @@
                     $("#discover-status").html("Error during discovery: " + errorThrown);
                 });
             });
+            
+            // Show/hide negative current option based on model
+            $('#node-input-model').change(function() {
+                var selectedModel = $(this).val();
+                if (selectedModel === "LS120") {
+                    $('.ls120-option').show();
+                } else {
+                    $('.ls120-option').hide();
+                }
+            });
+            
+            // Trigger model change to set initial visibility
+            $('#node-input-model').trigger('change');
+        },
+        oneditsave: function() {
+            // Trim the host value to prevent whitespace issues
+            if (this.host) {
+                this.host = this.host.trim();
+            }
         }
     });
 </script>
@@ -110,7 +129,7 @@
     </div>
     <div class="form-row">
         <label for="node-input-host"><i class="fa fa-globe"></i> Host</label>
-        <input type="text" id="node-input-host" placeholder="IP or hostname">
+        <input type="text" id="node-input-host" placeholder="IP or hostname (required)">
         <button type="button" id="node-input-discover" class="red-ui-button" style="margin-left: 10px;">
             <i class="fa fa-search"></i> Discover
         </button>
@@ -125,7 +144,7 @@
     </div>
     <div class="form-row">
         <label for="node-input-model"><i class="fa fa-cog"></i> Model</label>
-        <select id="node-input-model" style="width: 70%;">
+        <select id="node-input-model" style="width: 70%;" required>
             <!-- Populated by the oneditprepare function -->
         </select>
     </div>
@@ -151,11 +170,12 @@
         <label for="node-input-startAutomatically"><i class="fa fa-play"></i> Auto-start</label>
         <input type="checkbox" id="node-input-startAutomatically" style="width: auto; margin-top: 0;">
     </div>
-    <div class="form-row">
+    <div class="form-row ls120-option">
         <label for="node-input-showNegativeCurrent"><i class="fa fa-exchange"></i> Show negative current</label>
         <input type="checkbox" id="node-input-showNegativeCurrent" style="width: auto; margin-top: 0;">
         <div style="max-width: 480px; margin-top: 5px; margin-left: 105px; color: #999;">
             When enabled, current values will be shown as negative when power is negative (during generation).
+            Only applicable for LS120 model.
         </div>
     </div>
 </script>
@@ -184,33 +204,51 @@
         </dd>
         <dt>payload <span class="property-type">object</span></dt>
         <dd>
-            Energy data from the YouLess meter:
+            Energy data from the YouLess meter.
+            <p><strong>Common fields for all models:</strong></p>
             <ul>
                 <li><code>timestamp</code> - ISO date/time when the data was fetched</li>
+                <li><code>model</code> - Device model (LS110 or LS120)</li>
                 <li><code>power</code> - Current power usage in Watts (may be negative if generating)</li>
                 <li><code>powerAbsolute</code> - Absolute power value in Watts</li>
                 <li><code>isGenerating</code> - True when generating electricity</li>
+            </ul>
+
+            <p><strong>LS110 specific fields:</strong></p>
+            <ul>
+                <li><code>counter</code> - Total energy meter reading in kWh</li>
+                <li><code>signalLevel</code> - Signal strength indicator</li>
+            </ul>
+
+            <p><strong>LS120 specific fields:</strong></p>
+            <ul>
                 <li><code>net</code> - Net meter reading in kWh</li>
                 <li><code>delivered</code> - Energy delivered from grid (consumption)</li>
                 <li><code>returned</code> - Energy returned to grid (generation)</li>
                 <li><code>phases</code> - Phase-specific data (voltage, current, power)</li>
-                <li><code>s0</code> - S0 pulse counter data (LS120 only)</li>
+                <li><code>s0</code> - S0 pulse counter data</li>
+                <li><code>gas</code> - Gas meter data (if available)</li>
+                <li><code>water</code> - Water meter data (if available)</li>
             </ul>
         </dd>
     </dl>
     
     <h3>Details</h3>
-    <p>This node retrieves energy usage data from YouLess energy meters by accessing the meter's API.</p>
+    <p>This node retrieves energy usage data from YouLess energy meters by accessing the meter's API. It supports both LS110 and LS120 models, with automatic model detection.</p>
+    <p>The LS110 is a basic model that provides current power usage and a cumulative energy counter. The LS120 is more advanced and offers detailed metering including phase information, tariff data, and additional counters like gas and water.</p>
     
     <h3>Configuration</h3>
     <ul>
-        <li><strong>Host</strong> - IP address or hostname of the YouLess meter</li>
+        <li><strong>Host</strong> - IP address or hostname of the YouLess meter (required)</li>
         <li><strong>Interval</strong> - How often to poll for data (in seconds)</li>
-        <li><strong>Model</strong> - The YouLess model you're using</li>
+        <li><strong>Model</strong> - The YouLess model you're using (required, auto-detected during discovery)</li>
         <li><strong>Password</strong> - Optional password if the meter is password-protected</li>
         <li><strong>Custom topic</strong> - Optional custom message topic to differentiate between multiple YouLess devices</li>
         <li><strong>Decimal places</strong> - Maximum number of decimal places for numeric values (-1 to use values as received)</li>
         <li><strong>Auto-start</strong> - Start polling when Node-RED starts or the node is deployed</li>
-        <li><strong>Show negative current</strong> - Display current as negative when power is negative (during generation)</li>
+        <li><strong>Show negative current</strong> - Display current as negative when power is negative (LS120 only)</li>
     </ul>
+    
+    <h3>Important Notes</h3>
+    <p>The node requires both a valid host/IP address and model to be configured before it will start. If either is missing, the node will display an error and won't connect to the device.</p>
 </script>
