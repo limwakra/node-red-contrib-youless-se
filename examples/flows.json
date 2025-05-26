@@ -1,0 +1,243 @@
+[
+  {
+    "id": "basic-youless-flow",
+    "label": "Basic YouLess Energy Monitoring",
+    "info": "Simple flow to read YouLess energy data and display it",
+    "nodes": [
+      {
+        "id": "youless-1",
+        "type": "youless",
+        "z": "basic-youless-flow",
+        "name": "My YouLess Meter",
+        "ip": "192.168.1.100",
+        "password": "",
+        "interval": 30,
+        "x": 180,
+        "y": 100,
+        "wires": [["debug-1", "process-1"]]
+      },
+      {
+        "id": "debug-1",
+        "type": "debug",
+        "z": "basic-youless-flow",
+        "name": "Raw YouLess Data",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 430,
+        "y": 80,
+        "wires": []
+      },
+      {
+        "id": "process-1",
+        "type": "function",
+        "z": "basic-youless-flow",
+        "name": "Calculate Costs",
+        "func": "// Example: Calculate energy costs\nconst pricePerKwh = 0.25; // €0.25 per kWh\n\nif (msg.payload && typeof msg.payload.power !== 'undefined') {\n    const powerW = msg.payload.power;\n    const powerKw = powerW / 1000;\n    const hourlyRate = powerKw * pricePerKwh;\n    \n    msg.payload.costPerHour = Math.round(hourlyRate * 100) / 100;\n    msg.payload.dailyEstimate = Math.round(hourlyRate * 24 * 100) / 100;\n}\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 120,
+        "wires": [["debug-2"]]
+      },
+      {
+        "id": "debug-2",
+        "type": "debug",
+        "z": "basic-youless-flow",
+        "name": "With Cost Calculation",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 650,
+        "y": 120,
+        "wires": []
+      }
+    ]
+  },
+  {
+    "id": "dashboard-youless-flow",
+    "label": "YouLess Dashboard Example",
+    "info": "Example showing YouLess data on Node-RED Dashboard",
+    "nodes": [
+      {
+        "id": "youless-2",
+        "type": "youless",
+        "z": "dashboard-youless-flow",
+        "name": "Energy Meter",
+        "ip": "192.168.1.100",
+        "password": "",
+        "interval": 15,
+        "x": 150,
+        "y": 200,
+        "wires": [["extract-power", "extract-energy"]]
+      },
+      {
+        "id": "extract-power",
+        "type": "change",
+        "z": "dashboard-youless-flow",
+        "name": "Extract Power",
+        "rules": [
+          {
+            "t": "set",
+            "p": "payload",
+            "pt": "msg",
+            "to": "payload.power",
+            "tot": "msg"
+          }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 350,
+        "y": 180,
+        "wires": [["gauge-power"]]
+      },
+      {
+        "id": "extract-energy",
+        "type": "change",
+        "z": "dashboard-youless-flow",
+        "name": "Extract Energy",
+        "rules": [
+          {
+            "t": "set",
+            "p": "payload",
+            "pt": "msg",
+            "to": "payload.energy",
+            "tot": "msg"
+          }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 350,
+        "y": 220,
+        "wires": [["text-energy"]]
+      },
+      {
+        "id": "gauge-power",
+        "type": "ui_gauge",
+        "z": "dashboard-youless-flow",
+        "name": "Current Power",
+        "group": "energy-group",
+        "order": 1,
+        "width": 6,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Current Power Usage",
+        "label": "Watts",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "4000",
+        "colors": ["#00b500","#e6e600","#ca3838"],
+        "seg1": "1000",
+        "seg2": "2500",
+        "x": 540,
+        "y": 180,
+        "wires": []
+      },
+      {
+        "id": "text-energy",
+        "type": "ui_text",
+        "z": "dashboard-youless-flow",
+        "group": "energy-group",
+        "order": 2,
+        "width": 6,
+        "height": 2,
+        "name": "Total Energy",
+        "label": "Total Energy Consumed:",
+        "format": "{{msg.payload}} kWh",
+        "layout": "row-spread",
+        "x": 540,
+        "y": 220,
+        "wires": []
+      }
+    ]
+  },
+  {
+    "id": "home-assistant-flow",
+    "label": "YouLess to Home Assistant",
+    "info": "Example for sending YouLess data to Home Assistant",
+    "nodes": [
+      {
+        "id": "youless-3",
+        "type": "youless",
+        "z": "home-assistant-flow",
+        "name": "YouLess HA",
+        "ip": "192.168.1.100",
+        "password": "",
+        "interval": 60,
+        "x": 150,
+        "y": 300,
+        "wires": [["split-data"]]
+      },
+      {
+        "id": "split-data",
+        "type": "function",
+        "z": "home-assistant-flow",
+        "name": "Split for HA",
+        "func": "// Split data for separate HA entities\nconst powerMsg = {\n    payload: {\n        state: msg.payload.power,\n        attributes: {\n            unit_of_measurement: 'W',\n            friendly_name: 'Current Power',\n            device_class: 'power'\n        }\n    },\n    topic: 'homeassistant/sensor/youless_power/state'\n};\n\nconst energyMsg = {\n    payload: {\n        state: msg.payload.energy,\n        attributes: {\n            unit_of_measurement: 'kWh',\n            friendly_name: 'Total Energy',\n            device_class: 'energy'\n        }\n    },\n    topic: 'homeassistant/sensor/youless_energy/state'\n};\n\nreturn [powerMsg, energyMsg];",
+        "outputs": 2,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 300,
+        "wires": [["mqtt-power"], ["mqtt-energy"]]
+      },
+      {
+        "id": "mqtt-power",
+        "type": "mqtt out",
+        "z": "home-assistant-flow",
+        "name": "Power to MQTT",
+        "topic": "",
+        "qos": "0",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt-broker",
+        "x": 540,
+        "y": 280,
+        "wires": []
+      },
+      {
+        "id": "mqtt-energy",
+        "type": "mqtt out",
+        "z": "home-assistant-flow",
+        "name": "Energy to MQTT",
+        "topic": "",
+        "qos": "0",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt-broker",
+        "x": 540,
+        "y": 320,
+        "wires": []
+      }
+    ]
+  }
+]
