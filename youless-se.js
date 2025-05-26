@@ -444,9 +444,40 @@ module.exports = function(RED) {
             return node.model;
         }
 
+        // Function to validate required configuration
+        function validateConfig() {
+            // Check for required host
+            if (!node.host || node.host.trim() === "") {
+                node.error("Host/IP address is required but not configured");
+                node.status({fill: "red", shape: "dot", text: "missing host configuration"});
+                return false;
+            }
+            
+            // Check for required model
+            if (!node.model || !["LS110", "LS120"].includes(node.model)) {
+                node.error("Valid model (LS110/LS120) is required but not configured");
+                node.status({fill: "red", shape: "dot", text: "missing model configuration"});
+                return false;
+            }
+            
+            // Check interval is valid
+            if (isNaN(node.interval) || node.interval < 1) {
+                node.warn("Invalid interval, using default of 10 seconds");
+                node.interval = 10;
+            }
+            
+            return true;
+        }
+
         // Fetch data from YouLess meter
         async function fetchData() {
             try {
+                // Validate configuration first
+                if (!validateConfig()) {
+                    stopPolling();
+                    return;
+                }
+                
                 // First detect or confirm the model
                 const detectedModel = await detectModel();
                 let meterData;
@@ -511,7 +542,13 @@ module.exports = function(RED) {
 
         // Start polling
         function startPolling() {
+            // If already polling, don't start again
             if (intervalId !== null) return;
+            
+            // Validate configuration before starting
+            if (!validateConfig()) {
+                return;
+            }
             
             errorCount = 0;
             node.status({fill: "green", shape: "dot", text: "polling..."});
@@ -521,6 +558,7 @@ module.exports = function(RED) {
             
             // Set up the interval
             intervalId = setInterval(fetchData, node.interval * 1000);
+            node.log(`YouLess SE node started polling host ${node.host} at interval ${node.interval}s`);
         }
 
         // Stop polling
@@ -529,6 +567,7 @@ module.exports = function(RED) {
                 clearInterval(intervalId);
                 intervalId = null;
                 node.status({fill: "grey", shape: "dot", text: "not running"});
+                node.log("YouLess SE node stopped polling");
             }
         }
 
@@ -542,8 +581,10 @@ module.exports = function(RED) {
                 stopPolling();
                 startPolling();
             } else {
-                // Any other message triggers a single fetch
-                fetchData();
+                // For single fetch, validate configuration first
+                if (validateConfig()) {
+                    fetchData();
+                }
             }
         });
 
@@ -552,7 +593,6 @@ module.exports = function(RED) {
             // Use a small delay to ensure all initialization is complete
             setTimeout(() => {
                 startPolling();
-                node.log(`YouLess SE node auto-started with host ${this.host}`);
             }, 1000);
         }
 
