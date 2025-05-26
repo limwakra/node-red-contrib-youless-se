@@ -1,34 +1,40 @@
 {
   "name": "node-red-contrib-youless-se",
   "version": "1.0.0",
-  "description": "Node-RED node for YouLess energy metering devices (Second Edition)",
-  "author": "limwakra",
-  "license": "MIT",
+  "description": "Node-RED node for YouLess energy meters with support for various models (LS110, LS120)",
+  "main": "youless.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "node-red": {
+    "nodes": {
+      "youless": "youless.js"
+    }
+  },
   "keywords": [
     "node-red",
     "youless",
     "energy",
     "meter",
-    "electricity",
-    "gas",
-    "water",
-    "monitoring",
-    "smart meter"
+    "smart meter",
+    "home automation",
+    "energy monitoring"
   ],
-  "node-red": {
-    "nodes": {
-      "youless-se": "youless-se.js"
-    }
+  "author": {
+    "name": "Je Naam",
+    "email": "je.email@example.com"
   },
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/node-red-contrib-youless-se"
+    "url": "https://github.com/limwakra/node-red-contrib-youless-se.git"
   },
-  "dependencies": {
-    "axios": "^1.5.0"
+  "bugs": {
+    "url": "https://github.com/limwakra/node-red-contrib-youless-se/issues"
   },
+  "homepage": "https://github.com/limwakra/node-red-contrib-youless-se#readme",
   "engines": {
     "node": ">=14.0.0"
-  }
+  },
+  "dependencies": {}
 }
-
