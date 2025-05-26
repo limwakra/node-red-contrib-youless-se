@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-youless-se",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Node-RED node for YouLess energy meters with support for various models (LS110, LS120)",
   "main": "youless-se.js",
   "scripts": {
